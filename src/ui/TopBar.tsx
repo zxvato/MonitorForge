@@ -35,7 +35,7 @@ export function TopBar() {
           <path d="M6 28V8M26 28V8M6 12h20" />
           <rect x="9" y="4" width="14" height="6" rx="1.5" />
         </svg>
-        <span>Rod Desk Planner</span>
+        <span>MonitorForge</span>
       </div>
       <nav className="tabs">
         <button className={tab === 'design' ? 'on' : ''} onClick={() => set({ tab: 'design' })} data-testid="tab-design">

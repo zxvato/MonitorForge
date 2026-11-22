@@ -1,4 +1,4 @@
-# Rod Desk Planner
+# MonitorForge
 
 Plan a monitor stand / desk organiser built from **broom handles** and **3D-printed parts**,
 then export every printed part as STL plus a cut list and assembly PDF.
