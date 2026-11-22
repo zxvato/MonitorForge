@@ -10,6 +10,9 @@ export interface ShelfParams {
   overhang: number;
   thickness: number;
   cableNotch: boolean;
+  /** Length of the corner notches at the left/right ends that clear connector sleeves. */
+  notchL: number;
+  notchR: number;
 }
 
 export interface Tile {
@@ -88,6 +91,13 @@ export function buildShelf(p: ShelfParams, s: Settings, tileIndex = -1): Manifol
     cylX(d.R + 0.4, -W / 2 - 1, W / 2 + 1, -p.S / 2, 0, 96),
     cylX(d.R + 0.4, -W / 2 - 1, W / 2 + 1, p.S / 2, 0, 96),
   ];
+  // Corner notches so the shelf clears the connector sleeves around the beams.
+  const nw = d.Ro + 1;
+  for (const [len, x0, x1] of [[p.notchL, -W / 2 - 1, -W / 2 + p.notchL], [p.notchR, W / 2 - p.notchR, W / 2 + 1]] as const) {
+    if (len <= 0) continue;
+    cuts.push(box([x0, -depth / 2 - 1, -1], [x1, -p.S / 2 + nw, zt + 1]));
+    cuts.push(box([x0, p.S / 2 - nw, -1], [x1, depth / 2 + 1, zt + 1]));
+  }
   if (p.cableNotch) {
     const nd = Math.min(p.overhang - 3, 18);
     if (nd >= 8) {

@@ -136,7 +136,8 @@ h4 { margin: 18px 0 8px; font-size: 13px; }
 .btn-list button { text-align: left; }
 .btn-row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
 .part-lines { list-style: none; padding: 0; margin: 0; font-size: 13px; }
-.part-lines li { display: flex; justify-content: space-between; padding: 5px 0; border-bottom: 1px solid var(--line); }
+.part-lines li { display: flex; justify-content: space-between; gap: 12px; padding: 6px 0; border-bottom: 1px solid var(--line); }
+.part-lines li span:last-child { white-space: nowrap; font-variant-numeric: tabular-nums; }
 
 .parts-view { position: absolute; inset: 0; z-index: 40; overflow-y: auto; background: var(--bg); padding: 20px 28px 40px; }
 .parts-head { display: flex; justify-content: space-between; align-items: flex-end; gap: 16px; flex-wrap: wrap; }

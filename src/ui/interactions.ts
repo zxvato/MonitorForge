@@ -1,5 +1,5 @@
 // What happens when something from the palette is dropped into the scene.
-import { clearSpan, freeIntervals, pairFrame, postBlocked } from '../geometry/parts';
+import { clearSpan, freeIntervals, pairFrame, postBlocked, sleeveFreeSpan } from '../geometry/parts';
 import { drawerFrame } from '../geometry/addons/drawer';
 import { CLIP_H } from '../geometry/addons/divider';
 import { WATCH_RING_H } from '../geometry/addons/watch';
@@ -63,7 +63,8 @@ export function planDrop(kind: PaletteKind, hit: Hit | null, design: Design, top
         };
       }
       const { zF, T } = drawerFrame(pf.S, s);
-      const maxW = span - 2 * (6.8 + T + 1);
+      const [dlo, dhi] = sleeveFreeSpan(pf, along, s);
+      const maxW = dhi - dlo - 2 * (6.8 + T + 1);
       if (maxW < 60) return { action: 'none', message: 'Not enough room between the connectors for a drawer' };
       const maxH = pf.z + zF - 6;
       if (maxH < 25) return { action: 'none', message: 'These beams are too low for a drawer underneath' };

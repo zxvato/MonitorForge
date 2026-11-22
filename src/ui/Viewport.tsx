@@ -1,7 +1,7 @@
 import { Canvas, useThree, type ThreeEvent } from '@react-three/fiber';
 import { ContactShadows, Grid, Html, Line, OrbitControls, OrthographicCamera, PerspectiveCamera } from '@react-three/drei';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef } from 'react';
-import { Mesh, Plane, Raycaster, Vector2, Vector3, type Object3D } from 'three';
+import { Mesh, Plane, Raycaster, Vector2, Vector3, type Camera, type Object3D } from 'three';
 import { useStore } from '../model/store';
 import type { Design, Selection } from '../model/types';
 import type { Report } from '../export/report';
@@ -9,7 +9,7 @@ import { beamLabel, postLabel } from '../export/report';
 import { partMesh } from '../geometry/cache';
 import type { PartInstance } from '../geometry/parts';
 import { dims } from '../geometry/dims';
-import { mixColor, snap, threeGeometry, toModel } from './three-helpers';
+import { mixColor, snap, threeGeometry, toModel, toThree } from './three-helpers';
 import { planDrop, type Hit, type PaletteKind } from './interactions';
 import { getReport, useReport } from './useReport';
 
@@ -140,9 +140,40 @@ function useFacingPlane() {
   );
 }
 
+/** Pointer-down handler that selects a post and drags it on the desk (Shift = whole frame). */
+function usePostDrag() {
+  const drag = useDrag();
+  const select = useStore((s) => s.select);
+  const updatePost = useStore((s) => s.updatePost);
+  const change = useStore((s) => s.change);
+  return (e: ThreeEvent<PointerEvent>, id: string) => {
+    e.stopPropagation();
+    select({ type: 'post', id });
+    const g = useStore.getState().design.settings.gridSnap;
+    const orig = useStore.getState().design.posts.map((p) => ({ ...p }));
+    const me = orig.find((p) => p.id === id);
+    if (!me) return;
+    const plane = new Plane(new Vector3(0, 1, 0), 0);
+    const start = new Vector3();
+    // project the grab point straight down onto the desk so the post doesn't jump
+    if (!new Raycaster(e.ray.origin, e.ray.direction).ray.intersectPlane(plane, start)) return;
+    const s0 = toModel(start);
+    const all = e.shiftKey;
+    drag(plane, (v) => {
+      const m = toModel(v);
+      const dx = snap(me.x + m[0] - s0[0], g) - me.x;
+      const dy = snap(me.y + m[1] - s0[1], g) - me.y;
+      if (all)
+        change((dd) => ({ ...dd, posts: dd.posts.map((p) => { const o = orig.find((q) => q.id === p.id); return o ? { ...p, x: o.x + dx, y: o.y + dy } : p; }) }), false);
+      else updatePost(id, { x: me.x + dx, y: me.y + dy }, false);
+    });
+  };
+}
+
 function Scene({ report }: { report: Report }) {
   const design = report.design;
   const showDims = useStore((s) => s.showDims && s.tab === 'design');
+  const persp = useStore((s) => s.view === 'persp');
   return (
     <>
       <hemisphereLight args={['#ffffff', '#b9a68e', 1.1]} />
@@ -156,7 +187,7 @@ function Scene({ report }: { report: Report }) {
         <Parts report={report} />
         {showDims && <Dimensions report={report} />}
       </group>
-      <ContactShadows position={[0, 0.3, 0]} scale={5000} resolution={1024} blur={2.2} far={600} opacity={0.35} frames={Infinity} />
+      {persp && <ContactShadows position={[0, 0.3, 0]} scale={5000} resolution={1024} blur={2.2} far={600} opacity={0.35} frames={Infinity} />}
       <Bridge design={design} />
     </>
   );
@@ -198,27 +229,12 @@ function Frame({ report }: { report: Report }) {
   const select = useStore((s) => s.select);
   const updatePost = useStore((s) => s.updatePost);
   const updateBeam = useStore((s) => s.updateBeam);
-  const change = useStore((s) => s.change);
   const drag = useDrag();
   const facing = useFacingPlane();
   const d = dims(design.settings);
   const g = design.settings.gridSnap;
 
-  const onPost = (e: ThreeEvent<PointerEvent>, id: string) => {
-    e.stopPropagation();
-    select({ type: 'post', id });
-    const start = toModel(e.point);
-    const orig = useStore.getState().design.posts.map((p) => ({ ...p }));
-    const me = orig.find((p) => p.id === id)!;
-    const all = e.shiftKey;
-    drag(new Plane(new Vector3(0, 1, 0), 0), (v) => {
-      const m = toModel(v);
-      const dx = snap(me.x + m[0] - start[0], g) - me.x;
-      const dy = snap(me.y + m[1] - start[1], g) - me.y;
-      if (all) change((dd) => ({ ...dd, posts: dd.posts.map((p) => { const o = orig.find((q) => q.id === p.id)!; return { ...p, x: o.x + dx, y: o.y + dy }; }) }), false);
-      else updatePost(id, { x: me.x + dx, y: me.y + dy }, false);
-    });
-  };
+  const onPost = usePostDrag();
 
   const onPostTop = (e: ThreeEvent<PointerEvent>, id: string) => {
     e.stopPropagation();
@@ -319,9 +335,11 @@ function Parts({ report }: { report: Report }) {
   const addonColor = mixColor(color, '#ffffff', 0.55);
   const g = design.settings.gridSnap;
 
+  const postDrag = usePostDrag();
   const onDown = (e: ThreeEvent<PointerEvent>, inst: PartInstance) => {
     e.stopPropagation();
     const src = inst.source;
+    if (src?.type === 'node') return postDrag(e, src.id.split('@')[0]);
     select(src);
     if (src?.type !== 'addon') return;
     const a = design.addons.find((x) => x.id === src.id);
@@ -517,6 +535,12 @@ function Bridge({ design }: { design: Design }) {
           break;
         }
       }
+      // Forgiving drop: snap to the nearest post / beam on screen if the ray missed it.
+      const wants = kind === 'shelf' || kind === 'drawer' ? 'beam' : kind === 'post' ? null : 'post';
+      if (wants && hit?.type !== wants) {
+        const near = nearestOnScreen(wants, clientX, clientY, r, camera, useStore.getState().design);
+        if (near) hit = near;
+      }
       if (!hit) {
         const v = new Vector3();
         if (ray.ray.intersectPlane(new Plane(new Vector3(0, 1, 0), 0), v)) hit = { type: 'desk', point: toModel(v) };
@@ -530,7 +554,18 @@ function Bridge({ design }: { design: Design }) {
     };
     sceneApi.snapshot = () => {
       gl.render(scene, camera);
-      return gl.domElement.toDataURL('image/png');
+      // JPEG, max 1400 px wide: jsPDF embeds JPEGs as-is (PNGs get re-encoded, which is slow).
+      const src = gl.domElement;
+      const scale = Math.min(1, 1400 / src.width);
+      const c = document.createElement('canvas');
+      c.width = Math.round(src.width * scale);
+      c.height = Math.round(src.height * scale);
+      const ctx = c.getContext('2d');
+      if (!ctx) return undefined;
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, c.width, c.height);
+      ctx.drawImage(src, 0, 0, c.width, c.height);
+      return c.toDataURL('image/jpeg', 0.88);
     };
   }, [camera, gl, scene]);
 
@@ -567,4 +602,31 @@ function Bridge({ design }: { design: Design }) {
   }, [fitToken, view, camera, controls]);
 
   return <OrbitControls makeDefault enableRotate={view === 'persp'} enableDamping dampingFactor={0.12} maxPolarAngle={Math.PI / 2 - 0.02} />;
+}
+
+/** Nearest post or beam axis to a screen point, within 60 px. */
+function nearestOnScreen(type: 'post' | 'beam', cx: number, cy: number, rect: DOMRect, camera: Camera, design: Design): Hit | null {
+  const segs: { id: string; a: [number, number, number]; b: [number, number, number] }[] =
+    type === 'post'
+      ? design.posts.map((p) => ({ id: p.id, a: [p.x, p.y, 0], b: [p.x, p.y, p.height] }))
+      : design.beams.flatMap((bm) => {
+          const pa = design.posts.find((p) => p.id === bm.a), pb = design.posts.find((p) => p.id === bm.b);
+          return pa && pb ? [{ id: bm.id, a: [pa.x, pa.y, bm.z] as [number, number, number], b: [pb.x, pb.y, bm.z] as [number, number, number] }] : [];
+        });
+  let best: Hit | null = null;
+  let bestD = 60;
+  const v = new Vector3();
+  for (const sg of segs)
+    for (let i = 0; i <= 60; i++) {
+      const t = i / 60;
+      const p: [number, number, number] = [sg.a[0] + (sg.b[0] - sg.a[0]) * t, sg.a[1] + (sg.b[1] - sg.a[1]) * t, sg.a[2] + (sg.b[2] - sg.a[2]) * t];
+      v.copy(toThree(p)).project(camera);
+      const sx = rect.left + ((v.x + 1) / 2) * rect.width, sy = rect.top + ((1 - v.y) / 2) * rect.height;
+      const dd = Math.hypot(sx - cx, sy - cy);
+      if (dd < bestD) {
+        bestD = dd;
+        best = { type, id: sg.id, point: p };
+      }
+    }
+  return best;
 }

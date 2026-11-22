@@ -64,9 +64,11 @@ export function buildPDF(r: Report, snapshot?: string): jsPDF {
   p(`Generated ${new Date().toLocaleDateString()} · broom-handle Ø${s.rodDiameter} mm · socket clearance ${s.socketClearance} mm · bed ${s.bed.join('×')} mm`, 9);
   y += 2;
   if (snapshot) {
-    const iw = W - 2 * MARGIN, ih = iw * 0.56;
+    const iw = W - 2 * MARGIN;
+    const props = doc.getImageProperties(snapshot);
+    const ih = Math.min(iw * (props.height / props.width), 150);
     try {
-      doc.addImage(snapshot, 'PNG', MARGIN, y, iw, ih);
+      doc.addImage(snapshot, snapshot.startsWith('data:image/png') ? 'PNG' : 'JPEG', MARGIN, y, ih * (props.width / props.height), ih);
       y += ih + 4;
     } catch {
       /* ignore bad image */
@@ -120,7 +122,7 @@ export function buildPDF(r: Report, snapshot?: string): jsPDF {
   });
 
   // Per-post assembly
-  h2('Frame assembly, post by post (bottom → top)');
+  h2('Frame assembly, post by post (bottom to top)');
   for (const post of r.design.posts) {
     const nodes = [...r.topo.nodes.values()].filter((n) => n.postId === post.id).sort((a, b) => a.pos[2] - b.pos[2]);
     const parts: string[] = [];
@@ -129,13 +131,13 @@ export function buildPDF(r: Report, snapshot?: string): jsPDF {
       const rod = r.topo.rods.find((rr) => rr.kind === 'post' && rr.a === n.id);
       if (rod && i < nodes.length - 1) parts.push(`[${Math.round(rod.cut)} mm]`);
     });
-    p(`${postLabel(r.design, post.id)} at (${post.x}, ${post.y}): ${parts.join(' → ')}`, 9);
+    p(`${postLabel(r.design, post.id)} at (${post.x}, ${post.y}): ${parts.join(' > ')}`, 9);
   }
   h2('Beams');
   for (const b of r.design.beams) {
     const rods = r.topo.rods.filter((rr) => rr.kind === 'beam' && rr.sourceId === b.id);
     if (!rods.length) continue;
-    p(`${beamLabel(r.design, b.id)}: ${postLabel(r.design, b.a)} → ${postLabel(r.design, b.b)} at ${b.z} mm — pieces ${rods.map((rr) => Math.round(rr.cut) + ' mm').join(', ')}`, 9);
+    p(`${beamLabel(r.design, b.id)}: ${postLabel(r.design, b.a)} to ${postLabel(r.design, b.b)} at ${b.z} mm: pieces ${rods.map((rr) => Math.round(rr.cut) + ' mm').join(', ')}`, 9);
   }
 
   // --- Printed parts
@@ -156,7 +158,7 @@ export function buildPDF(r: Report, snapshot?: string): jsPDF {
   [
     '1. Cut the handles to the lengths in the cut list. Label every piece with a pencil.',
     '2. Print all parts. PLA or PETG, 3–4 walls, 20–30% infill. Connectors print without supports in the saved orientation.',
-    '3. Push the feet onto the bottom of every post, then build up each post with its connectors as listed post by post. A rubber mallet helps; add a drop of wood glue once you are happy.',
+    '3. Push the feet onto the bottom of every post, then build up each post with its connectors as listed post by post. A rubber mallet helps; add a drop of wood glue once you are happy with the fit.',
     '4. Fit the beams between the posts. Tilt the frame slightly to get the last beam in.',
     '5. Drawers: push both hangers up onto the front and back beams until they snap on, then slide the drawer box in from the front.',
     '6. Monitor shelves: lay them on top of the beams; the grooves underneath keep them in place.',

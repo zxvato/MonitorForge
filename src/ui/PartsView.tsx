@@ -28,14 +28,16 @@ export function PartsView() {
   }, [report]);
   const fileBase = slug(report.design.name || 'desk') || 'desk';
 
-  const exportZip = async () => {
+  const exportZip = () => {
     setBusy(true);
-    try {
-      const blob = await buildZip(report, sceneApi.snapshot?.());
-      download(blob, `${fileBase}-parts.zip`);
-    } finally {
-      setBusy(false);
-    }
+    // let the button repaint before the (synchronous) packing starts
+    setTimeout(() => {
+      try {
+        download(buildZip(report, sceneApi.snapshot?.()), `${fileBase}-parts.zip`);
+      } finally {
+        setBusy(false);
+      }
+    }, 30);
   };
   const exportPdf = () => download(buildPDF(report, sceneApi.snapshot?.()).output('blob'), `${fileBase}-assembly.pdf`);
   const exportCsv = () => download(new Blob([cutListCSV(report.topo.rods)], { type: 'text/csv' }), `${fileBase}-cut-list.csv`);

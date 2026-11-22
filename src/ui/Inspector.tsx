@@ -1,6 +1,6 @@
 import { useStore } from '../model/store';
 import type { AddOn, Design, Warning } from '../model/types';
-import { canonicalize, connectorName, maskDirs, DIR_NAMES } from '../model/rotations';
+import { canonicalize, connectorName } from '../model/rotations';
 import { beamGeometry } from '../model/topology';
 import { beamLabel, postLabel, type Report } from '../export/report';
 import { addOnParts, clearSpan, pairFrame } from '../geometry/parts';
@@ -16,7 +16,6 @@ export function Inspector() {
   if (sel?.type === 'post' && design.posts.some((p) => p.id === sel.id)) body = <PostPanel id={sel.id} report={report} />;
   else if (sel?.type === 'beam' && design.beams.some((p) => p.id === sel.id)) body = <BeamPanel id={sel.id} report={report} />;
   else if (sel?.type === 'addon' && design.addons.some((p) => p.id === sel.id)) body = <AddOnPanel id={sel.id} report={report} />;
-  else if (sel?.type === 'node' && report.topo.nodes.has(sel.id)) body = <NodePanel id={sel.id} report={report} />;
   return <aside className="inspector">{body}</aside>;
 }
 
@@ -122,7 +121,7 @@ function PostPanel({ id, report }: { id: string; report: Report }) {
       <ol className="stack">
         {nodes.map((n, i) => (
           <li key={n.id}>
-            <span className="chip part">{n.kind === 'foot' ? 'Foot' : connectorName(canonicalize(n.mask).mask)}</span>
+            <span><span className="chip part">{n.kind === 'foot' ? 'Foot' : connectorName(canonicalize(n.mask).mask)}</span></span>
             <span className="muted">@ {n.pos[2]}</span>
             {i < nodes.length - 1 && rods[i] && <div className="chip wood">handle {Math.round(rods[i].cut)} mm</div>}
           </li>
@@ -174,28 +173,6 @@ function BeamPanel({ id, report }: { id: string; report: Report }) {
       </div>
       <p className="muted small">Drag the beam in the 3D view to move it up or down. If it passes another post, it is split there with a tee.</p>
       <Warnings list={report.warnings.filter((w) => w.ref === id)} />
-    </>
-  );
-}
-
-function NodePanel({ id, report }: { id: string; report: Report }) {
-  const n = report.topo.nodes.get(id)!;
-  const select = useStore((s) => s.select);
-  const name = n.kind === 'foot' ? 'Foot' : connectorName(canonicalize(n.mask).mask);
-  const inst = report.instances.find((i) => i.source?.id === id);
-  const pm = inst ? printMesh(inst.spec, report.design.settings) : null;
-  return (
-    <>
-      <Header kicker="Connector" title={name} />
-      <div className="stats">
-        <Stat label="On post" value={<a href="#" onClick={(e) => { e.preventDefault(); select({ type: 'post', id: n.postId }); }}>{postLabel(report.design, n.postId)}</a>} />
-        <Stat label="Height" value={`${n.pos[2]} mm`} />
-        <Stat label="Sockets" value={n.kind === 'foot' ? 'up' : maskDirs(n.mask).map((i) => DIR_NAMES[i]).join(' ')} />
-        {pm && <Stat label="Print size" value={pm.size.map((v) => v.toFixed(0)).join(' × ') + ' mm'} />}
-      </div>
-      <p className="muted small">
-        Connectors are chosen automatically. Sockets are {(report.design.settings.rodDiameter + report.design.settings.socketClearance).toFixed(1)} mm across and {report.design.settings.socketDepth} mm deep; side holes are teardrop-shaped so they print without supports.
-      </p>
     </>
   );
 }

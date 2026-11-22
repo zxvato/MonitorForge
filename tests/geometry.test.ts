@@ -33,7 +33,7 @@ describe('generators produce valid solids', () => {
   });
   it('foot', () => ok(buildMesh(() => buildFoot(s))));
   it('shelf (single and tiled)', () => {
-    const p = { S: 220, width: 552, overhang: 25, thickness: 8, cableNotch: true };
+    const p = { S: 220, width: 552, overhang: 25, thickness: 8, cableNotch: true, notchL: 34, notchR: 34 };
     const tiles = shelfTiles(p, s);
     expect(tiles.length).toBeGreaterThan(1);
     const whole = buildMesh(() => buildShelf(p, s));

@@ -124,7 +124,10 @@ export function pairFrame(topo: Topology, beams: [string, string]): PairFrame {
   return { ok: true, S, axis, z, fa: A.fixed, fb: B.fixed, from, to, stations, frame };
 }
 
-/** Largest clear span between connectors around `near`, inside a beam pair. */
+/**
+ * Largest span between connector cores around `near` (shelves may reach this far
+ * by notching around the sleeves).
+ */
 export function clearSpan(pf: PairFrame, near: number, s: Settings): [number, number] {
   const d = dims(s);
   const pts = [...new Set([pf.from, pf.to, ...pf.stations])].sort((a, b) => a - b);
@@ -136,11 +139,38 @@ export function clearSpan(pf: PairFrame, near: number, s: Settings): [number, nu
   return [lo + d.Ro + 2, hi - d.Ro - 2];
 }
 
+/** Span that is clear of the connector sleeves along the beams too (for drawers). */
+export function sleeveFreeSpan(pf: PairFrame, near: number, s: Settings): [number, number] {
+  const d = dims(s);
+  const [lo, hi] = clearSpan(pf, near, s);
+  const extra = d.sleeveLen - d.Ro;
+  return [lo + extra, hi - extra];
+}
+
+/** Error if [a0, a1] hits a connector core; returns notch lengths for sleeves at either end. */
+function shelfClearance(pf: PairFrame, a0: number, a1: number, s: Settings, id: string) {
+  const d = dims(s);
+  let notchL = 0, notchR = 0;
+  let warning: Warning | null = null;
+  if (a0 < pf.from - d.Ro || a1 > pf.to + d.Ro) warning = { level: 'error', message: 'Monitor shelf hangs past the end of the beams', ref: id };
+  for (const t of pf.stations) {
+    if (overlaps(a0, a1, t - d.Ro - 1, t + d.Ro + 1)) {
+      warning = { level: 'error', message: 'Monitor shelf runs into a post — make it narrower or move it', ref: id };
+      continue;
+    }
+    const reach = d.sleeveLen + 1;
+    if (t <= a0 && t + reach > a0) notchL = Math.max(notchL, t + reach - a0);
+    if (t >= a1 && t - reach < a1) notchR = Math.max(notchR, a1 - (t - reach));
+  }
+  if (notchL + notchR > a1 - a0 - 20) warning = { level: 'error', message: 'Monitor shelf is too narrow to fit between the connectors', ref: id };
+  return { notchL: Math.round(notchL * 10) / 10, notchR: Math.round(notchR * 10) / 10, warning };
+}
+
 function spanWarning(pf: PairFrame, a0: number, a1: number, s: Settings, what: string, id: string): Warning | null {
   const d = dims(s);
   if (a0 < pf.from - d.Ro || a1 > pf.to + d.Ro) return { level: 'error', message: `${what} hangs past the end of the beams`, ref: id };
   for (const t of pf.stations)
-    if (overlaps(a0, a1, t - d.Ro - 1, t + d.Ro + 1)) return { level: 'error', message: `${what} collides with a connector — make it narrower or move it`, ref: id };
+    if (overlaps(a0, a1, t - d.sleeveLen - 1, t + d.sleeveLen + 1)) return { level: 'error', message: `${what} collides with a connector — make it narrower or move it`, ref: id };
   return null;
 }
 
@@ -212,11 +242,11 @@ function shelfParts(a: ShelfAddOn, design: Design, topo: Topology, sk: string): 
   const pf = pairFrame(topo, a.beams);
   if (!pf.ok) return { instances: [], warnings: [{ level: 'error', message: `Monitor shelf: ${pf.error}`, ref: a.id }] };
   const warnings: Warning[] = [];
-  const w = spanWarning(pf, a.center - a.width / 2, a.center + a.width / 2, s, 'Monitor shelf', a.id);
-  if (w) warnings.push(w);
-  const p: ShelfParams = { S: r1(pf.S), width: r1(a.width), overhang: r1(a.overhang), thickness: r1(a.thickness), cableNotch: a.cableNotch };
+  const cl = shelfClearance(pf, a.center - a.width / 2, a.center + a.width / 2, s, a.id);
+  if (cl.warning) warnings.push(cl.warning);
+  const p: ShelfParams = { S: r1(pf.S), width: r1(a.width), overhang: r1(a.overhang), thickness: r1(a.thickness), cableNotch: a.cableNotch, notchL: cl.notchL, notchR: cl.notchR };
   const tiles = shelfTiles(p, s);
-  const base = `${sk}|shelf:${p.S}:${p.width}:${p.overhang}:${p.thickness}:${p.cableNotch ? 1 : 0}`;
+  const base = `${sk}|shelf:${p.S}:${p.width}:${p.overhang}:${p.thickness}:${p.cableNotch ? 1 : 0}:${p.notchL}:${p.notchR}`;
   const instances = tiles.map((_, i) => ({
     spec: {
       key: `${base}:${i}`,
@@ -258,7 +288,7 @@ function drawerParts(a: DrawerAddOn, design: Design, topo: Topology, sk: string)
   const W = r1(a.width), H = r1(a.height);
   const boxSpec: PartSpec = {
     key: `${sk}|drawerbox:${S}:${W}:${H}`,
-    name: `Drawer box ${W}×${r1(drawerFrame(S, s).Db)}×${H}`,
+    name: `Drawer box ${W}×${Math.round(drawerFrame(S, s).Db)}×${H}`,
     group: 'Drawers',
     build: (ss) => buildDrawerBox(S, W, H, ss),
     print: new Matrix4(),

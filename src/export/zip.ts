@@ -1,4 +1,4 @@
-import JSZip from 'jszip';
+import { strToU8, zipSync, type Zippable } from 'fflate';
 import { printMesh } from '../geometry/cache';
 import { toBinarySTL } from './stl';
 import { cutListCSV } from './bom';
@@ -8,8 +8,8 @@ import type { Report } from './report';
 export const slug = (s: string) =>
   s.toLowerCase().replace(/×/g, 'x').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
 
-export async function buildZip(r: Report, snapshot?: string): Promise<Blob> {
-  const zip = new JSZip();
+export function buildZip(r: Report, snapshot?: string): Blob {
+  const files: Zippable = {};
   const s = r.design.settings;
   const used = new Set<string>();
   for (const l of r.parts) {
@@ -17,11 +17,11 @@ export async function buildZip(r: Report, snapshot?: string): Promise<Blob> {
     let name = `${slug(l.spec.group)}/${slug(l.spec.name)}_x${l.qty}.stl`;
     for (let k = 2; used.has(name); k++) name = `${slug(l.spec.group)}/${slug(l.spec.name)}-${k}_x${l.qty}.stl`;
     used.add(name);
-    zip.file(`parts/${name}`, toBinarySTL(pm.positions, pm.indices, l.spec.name));
+    files[`parts/${name}`] = new Uint8Array(toBinarySTL(pm.positions, pm.indices, l.spec.name));
   }
-  zip.file('cut-list.csv', cutListCSV(r.topo.rods));
-  zip.file('design.json', JSON.stringify(r.design, null, 2));
-  zip.file('assembly.pdf', buildPDF(r, snapshot).output('arraybuffer'));
+  files['cut-list.csv'] = strToU8(cutListCSV(r.topo.rods));
+  files['design.json'] = strToU8(JSON.stringify(r.design, null, 2));
+  files['assembly.pdf'] = [new Uint8Array(buildPDF(r, snapshot).output('arraybuffer')), { level: 0 }];
   const readme = [
     `${r.design.name}`,
     '',
@@ -34,11 +34,12 @@ export async function buildZip(r: Report, snapshot?: string): Promise<Blob> {
     'assembly.pdf  overview, cutting plan and assembly steps',
     'design.json   load this back into the planner (Open)',
     '',
-    'Tip: print one Elbow first and check the fit on your handle. Too tight? Raise',
+    'Tip: print one connector first and check the fit on your handle. Too tight? Raise',
     '"socket clearance" in Settings and export again.',
   ].join('\n');
-  zip.file('README.txt', readme);
-  return zip.generateAsync({ type: 'blob', compression: 'DEFLATE' });
+  files['README.txt'] = strToU8(readme);
+  const data = zipSync(files, { level: 6 });
+  return new Blob([data], { type: 'application/zip' });
 }
 
 export function download(blob: Blob, filename: string) {
