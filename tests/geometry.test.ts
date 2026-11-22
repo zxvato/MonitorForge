@@ -5,6 +5,7 @@ import { buildShelf, shelfTiles } from '../src/geometry/addons/shelf';
 import { buildDrawerBox, buildHanger } from '../src/geometry/addons/drawer';
 import { buildDividerClip, buildDividerPanel } from '../src/geometry/addons/divider';
 import { buildWatchStand } from '../src/geometry/addons/watch';
+import { buildFitTest } from '../src/geometry/fittest';
 import { collectParts } from '../src/geometry/parts';
 import { printMesh } from '../src/geometry/cache';
 import { computeTopology } from '../src/model/topology';
@@ -53,6 +54,11 @@ describe('generators produce valid solids', () => {
   it('divider clip and panel', () => {
     ok(buildMesh(() => buildDividerClip(5, s)));
     ok(buildMesh(() => buildDividerPanel({ L: 360, z0: 0, z1: 140, thickness: 5 }, s)));
+  });
+  it('fit test piece', () => {
+    const m = buildMesh(() => buildFitTest(s));
+    ok(m);
+    expect(m.min[2]).toBeCloseTo(0, 3);
   });
   it('watch stand', () => ok(buildMesh(() => buildWatchStand({ armLength: 30, tilt: 15, puckDiameter: 27.5, puckDepth: 7 }, s))));
 });

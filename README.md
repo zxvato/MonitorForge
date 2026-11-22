@@ -3,7 +3,15 @@
 Plan a monitor stand / desk organiser built from **broom handles** and **3D-printed parts**,
 then export every printed part as STL plus a cut list and assembly PDF.
 
-## Run it
+## Try it
+
+**https://zxvato.github.io/MonitorForge/** — runs in the browser, nothing to install.
+It redeploys automatically on every push to `main`.
+
+Before printing a whole set, open *Parts & export* and print the **fit test** (five short sockets
+with different clearances). Click the number of the one that fits your handle best.
+
+## Run it locally
 
 ```bash
 npm install

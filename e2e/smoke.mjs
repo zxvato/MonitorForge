@@ -109,8 +109,8 @@ try {
   await download.saveAs(zipPath);
   const zip = unzipSync(new Uint8Array(readFileSync(zipPath)));
   const names = Object.keys(zip);
-  const stls = names.filter((n) => n.endsWith('.stl'));
-  assert(names.includes('assembly.pdf') && names.includes('cut-list.csv') && names.includes('design.json'), 'zip has pdf, cut list and design');
+  const stls = names.filter((n) => n.startsWith('parts/') && n.endsWith('.stl'));
+  assert(names.includes('assembly.pdf') && names.includes('cut-list.csv') && names.includes('design.json') && names.includes('fit-test.stl'), 'zip has pdf, cut list, design and fit test');
   assert(stls.length === cards, `zip has one STL per unique part (${stls.length})`);
   const bed = JSON.parse(strFromU8(zip['design.json'])).settings.bed;
   for (const n of stls) {

@@ -14,6 +14,7 @@ import { mixColor, threeGeometry } from './three-helpers';
 import { thumbnail } from './thumbs';
 import { useReport } from './useReport';
 import { sceneApi } from './Viewport';
+import { fitTestClearances, fitTestSpec } from '../geometry/fittest';
 
 export function PartsView() {
   const report = useReport();
@@ -66,6 +67,8 @@ export function PartsView() {
           <ul>{errors.map((e, i) => <li key={i}>{e.message}</li>)}</ul>
         </div>
       )}
+
+      <FitTest report={report} />
 
       <section>
         <h3>Broom handles</h3>
@@ -175,5 +178,39 @@ function PartPreview({ line, report, onClose }: { line: PartLine; report: Report
         </p>
       </div>
     </div>
+  );
+}
+
+function FitTest({ report }: { report: Report }) {
+  const s = report.design.settings;
+  const update = useStore((st) => st.updateSettings);
+  const spec = useMemo(() => fitTestSpec(s), [s]);
+  const img = useMemo(() => thumbnail(spec, s, s.partColor), [spec, s]);
+  const clear = fitTestClearances(s);
+  const pm = printMesh(spec, s);
+  const stl = () => download(new Blob([toBinarySTL(pm.positions, pm.indices, 'fit test')], { type: 'model/stl' }), 'fit-test.stl');
+  return (
+    <section>
+      <h3>Test the fit first</h3>
+      <div className="fit-test">
+        <img src={img} alt="Fit test piece" />
+        <div className="fit-body">
+          <p>
+            Print this small piece ({pm.size.map((v) => v.toFixed(0)).join(' × ')} mm, about 15 minutes) and push your broom handle into each socket.
+            Pick the one that is snug but goes in by hand, then click its number to use that clearance for every part.
+          </p>
+          <div className="btn-row">
+            <button className="primary" onClick={stl} data-testid="fit-test-stl">Download fit test STL</button>
+          </div>
+          <div className="fit-choices">
+            {clear.map((c, i) => (
+              <button key={i} className={c === s.socketClearance ? 'on' : ''} onClick={() => update({ socketClearance: c })}>
+                <b>{i + 1}</b> {'•'.repeat(i + 1)} <span className="muted">+{c} mm</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+    </section>
   );
 }

@@ -174,3 +174,10 @@ input[type="color"] { width: 44px; height: 28px; border: 1px solid var(--line); 
   .inspector { width: 260px; }
   .brand span, .hint { display: none; }
 }
+
+.fit-test { display: grid; grid-template-columns: 220px 1fr; gap: 18px; align-items: center; background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 14px 16px; box-shadow: var(--shadow); }
+.fit-test img { width: 100%; border-radius: 8px; background: linear-gradient(#f8f9fb, #eceff3); }
+.fit-body p { margin: 0; max-width: 62ch; line-height: 1.5; }
+.fit-choices { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 10px; }
+.fit-choices button { display: flex; gap: 6px; align-items: baseline; font-variant-numeric: tabular-nums; }
+@media (max-width: 700px) { .fit-test { grid-template-columns: 1fr; } }

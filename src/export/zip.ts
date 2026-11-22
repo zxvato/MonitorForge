@@ -4,6 +4,7 @@ import { toBinarySTL } from './stl';
 import { cutListCSV } from './bom';
 import { buildPDF } from './pdf';
 import type { Report } from './report';
+import { fitTestSpec } from '../geometry/fittest';
 
 export const slug = (s: string) =>
   s.toLowerCase().replace(/×/g, 'x').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
@@ -19,6 +20,8 @@ export function buildZip(r: Report, snapshot?: string): Blob {
     used.add(name);
     files[`parts/${name}`] = new Uint8Array(toBinarySTL(pm.positions, pm.indices, l.spec.name));
   }
+  const ft = printMesh(fitTestSpec(s), s);
+  files['fit-test.stl'] = new Uint8Array(toBinarySTL(ft.positions, ft.indices, 'fit test'));
   files['cut-list.csv'] = strToU8(cutListCSV(r.topo.rods));
   files['design.json'] = strToU8(JSON.stringify(r.design, null, 2));
   files['assembly.pdf'] = [new Uint8Array(buildPDF(r, snapshot).output('arraybuffer')), { level: 0 }];
@@ -29,6 +32,7 @@ export function buildZip(r: Report, snapshot?: string): Blob {
     `Handles to buy: ${r.stock.bars.length} × ${s.stockLength} mm`,
     `Printed parts: ${r.parts.reduce((a, l) => a + l.qty, 0)} (${r.parts.length} unique files — print each file the number of times in its name, _xN)`,
     '',
+    'fit-test.stl  print this first: 5 short sockets with different clearances',
     'parts/        STL files, already in print orientation',
     'cut-list.csv  handle lengths to saw',
     'assembly.pdf  overview, cutting plan and assembly steps',
